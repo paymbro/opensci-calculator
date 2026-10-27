@@ -1,0 +1,33 @@
+{
+  "name": "opensci-calculator-build",
+  "private": true,
+  "description": "Build wrapper for the OpenSci Calculator desktop app (app code is in ./app)",
+  "scripts": {
+    "dist": "electron-builder --win portable",
+    "start": "electron app"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "io.github.opensci.calculator",
+    "productName": "OpenSci Calculator",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "OpenSci-Calculator-Portable.exe"
+    },
+    "directories": {
+      "app": "app",
+      "output": "dist"
+    },
+    "asar": true
+  }
+}

@@ -1,0 +1,17 @@
+# dependencies and build output
+node_modules/
+dist/
+*.exe
+
+# third-party reference material (manuals, photos, screenshots) - not ours to redistribute
+references/*
+!references/nist/
+
+# generated test output
+app/tests/out/
+app/tests/shots/
+app/tests/out_*.png
+
+# local working notes
+PROGRESS.md
+npx
