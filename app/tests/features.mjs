@@ -107,6 +107,35 @@ check('SHIFT functions', 'Ctrl+Shift+4 → A (stored 5)', () => R('SHIFT ' + KEY
 check('SETTINGS', 'Get Started opens the shortcuts window', () => { let opened = 0; const c = newCalc(); c.onGetStarted = () => opened++; press(c, 'SETTINGS D4'); return opened; }, '1');
 for (const [ch, id] of Object.entries(KEYBOARD_SHIFT_MAP)) check('SHIFT functions', `PC Shift+${ch} → SHIFT ${id} (${SHIFTED[id]})`, () => SHIFTED[id], (s) => !!s);
 
+// rebindable shortcuts: the defaults behave exactly like the fixed maps, and changes move shortcuts between actions
+{
+  const B = await import('../src/core/bindings.js');
+  const ev = (o) => ({ key: '', code: '', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...o });
+  const m0 = B.comboMap({});
+  const sec = 'Rebindable shortcuts';
+  check(sec, 'every plain key does what it did', () => Object.entries(KEYBOARD_MAP).filter(([k, id]) => B.lookup(m0, ev({ key: k, shiftKey: /^[A-Z]$/.test(k) })) !== (KEYBOARD_SHIFT_MAP[k] ? 'shift:' : 'key:') + (KEYBOARD_SHIFT_MAP[k] || id)).map(([k]) => k).join(' ') || 'all', 'all');
+  check(sec, 'every Shift+letter does what it did', () => Object.entries(KEYBOARD_SHIFT_MAP).filter(([k, id]) => B.lookup(m0, ev({ key: k, shiftKey: true })) !== 'shift:' + id).map(([k]) => k).join(' ') || 'all', 'all');
+  check(sec, 'every Ctrl+Shift key does what it did', () => Object.entries(KEYBOARD_CTRL_SHIFT_MAP).filter(([code, id]) => B.lookup(m0, ev({ code, ctrlKey: true, shiftKey: true })) !== 'shift:' + id).map(([c]) => c).join(' ') || 'all', 'all');
+  check(sec, 'Ctrl+= / Ctrl++ / Ctrl+- / Ctrl+0 resize', () => [['Equal', false], ['Equal', true], ['NumpadAdd', false], ['Minus', false], ['NumpadSubtract', false], ['Digit0', false]].map(([code, s]) => B.lookup(m0, ev({ code, ctrlKey: true, shiftKey: s }))).join(' '), 'win:zoomIn win:zoomIn win:zoomIn win:zoomOut win:zoomOut win:zoomReset');
+  check(sec, 'Shift+Enter still runs EXE', () => B.lookup(m0, ev({ key: 'Enter', shiftKey: true })), 'key:EXE');
+  check(sec, 'lone modifiers are not shortcuts', () => ['Control', 'Shift', 'Alt', 'Dead'].map((key) => B.comboOf(ev({ key }))).join(','), ',,,');
+  check(sec, 'no shortcut is on two actions by default', () => { const seen = new Map(); const dup = []; for (const [a, l] of Object.entries(B.DEFAULT_BINDINGS)) for (const c of l) { if (seen.has(c)) dup.push(c); seen.set(c, a); } return dup.join(' ') || 'none'; }, 'none');
+  let o = B.addBinding({}, 'key:SIN', 'Ctrl+KeyK').overrides;
+  check(sec, 'add Ctrl+K to sin', () => B.lookup(B.comboMap(o), ev({ code: 'KeyK', ctrlKey: true })), 'key:SIN');
+  check(sec, 'sin keeps s too', () => B.lookup(B.comboMap(o), ev({ key: 's' })), 'key:SIN');
+  const r = B.addBinding(o, 'key:COS', 's');
+  check(sec, 'giving s to cos takes it from sin', () => [B.lookup(B.comboMap(r.overrides), ev({ key: 's' })), B.effectiveBindings(r.overrides)['key:SIN'].join(' '), r.moved.map((m) => m.from).join()].join(' | '), 'key:COS | Ctrl+KeyK | key:SIN');
+  o = B.removeBinding(r.overrides, 'key:COS', 'c').overrides;
+  check(sec, 'remove c from cos', () => String(B.lookup(B.comboMap(o), ev({ key: 'c' }))), 'null');
+  o = B.resetBinding(o, 'key:SIN').overrides;
+  check(sec, 'reset sin takes s back and drops Ctrl+K', () => [B.lookup(B.comboMap(o), ev({ key: 's' })), String(B.lookup(B.comboMap(o), ev({ code: 'KeyK', ctrlKey: true })))].join(' '), 'key:SIN null');
+  o = B.resetBinding(B.resetBinding(o, 'key:COS').overrides, 'key:SIN').overrides;
+  check(sec, 'resetting everything leaves no overrides', () => JSON.stringify(o), '{}');
+  check(sec, 'stored junk is ignored', () => JSON.stringify(B.cleanOverrides({ 'key:SIN': ['s', 5, ''], 'key:NOPE': ['x'], 'win:zoomIn': 'Ctrl+K' })), '{"key:SIN":["s"]}');
+  check(sec, 'key caps text', () => ['Ctrl+Shift+Digit7', 'S', ' ', 'x', 'Ctrl+NumpadAdd', 'Shift+F1'].map((c) => B.comboKeys(c).join('+')).join(' | '), 'Ctrl+Shift+7 | Shift+S | Space | X | Ctrl+Num + | Shift+F1');
+  check(sec, 'every action has a label', () => B.ACTIONS.filter((a) => !B.actionLabel(a) || B.actionLabel(a) === 'undefined').join(' ') || 'all', 'all');
+}
+
 // the − key also works as a negative sign where a value is expected
 const minusTests = [
   ['√26(−1)', 'SQRT D2 D6 RIGHT LPAR SUB D1 RPAR EXE', '-√26'],

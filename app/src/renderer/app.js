@@ -2,7 +2,7 @@
 import { buildBodySVG, KEYS, BODY_W, BODY_H, LCD_RECT } from './body.js';
 import { Calculator } from '../core/calc.js';
 import { APP_FACTORIES } from '../apps/index.js';
-import { KEYBOARD_MAP, KEYBOARD_SHIFT_MAP, KEYBOARD_CTRL_SHIFT_MAP } from '../core/keys.js';
+import { STORAGE_KEY as BINDINGS_KEY, loadOverrides, comboMap, lookup } from '../core/bindings.js';
 import { W, H } from '../core/lcd.js';
 
 const storage = {
@@ -119,34 +119,26 @@ function flash(id) {
   g.classList.add('down');
   setTimeout(() => g.classList.remove('down'), 110);
 }
-const SHIFTED_TYPING = { '!': ['CATALOG'], '%': null };
+// shortcuts can be changed in the shortcuts window (SETTINGS > Get Started); it saves them to the
+// shared localStorage, so reload them when it does and whenever this window gets focus back
+let keymap = comboMap(loadOverrides(localStorage));
+const reloadBindings = () => { keymap = comboMap(loadOverrides(localStorage)); };
+window.addEventListener('storage', (e) => { if (e.key === BINDINGS_KEY || e.key === null) reloadBindings(); });
+window.addEventListener('focus', reloadBindings);
+
 window.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
-    const yid = KEYBOARD_CTRL_SHIFT_MAP[e.code];
-    if (yid) {
-      e.preventDefault();
-      if (!calc.shift) { flash('SHIFT'); calc.press('SHIFT'); }
-      flash(yid);
-      press(yid);
-      return;
-    }
-  }
-  if (e.ctrlKey && (e.key === '=' || e.key === '+')) { e.preventDefault(); resizeBy(1.1); return; }
-  if (e.ctrlKey && e.key === '-') { e.preventDefault(); resizeBy(1 / 1.1); return; }
-  if (e.ctrlKey && e.key === '0') { e.preventDefault(); window.shell && window.shell.scale(860, 'center'); return; }
-  if (e.ctrlKey || e.altKey || e.metaKey) return;
-  const sid = KEYBOARD_SHIFT_MAP[e.key];
-  if (sid) {
-    e.preventDefault();
-    if (!calc.shift) { flash('SHIFT'); calc.press('SHIFT'); }
-    flash(sid);
-    press(sid);
+  const action = lookup(keymap, e);
+  if (!action) return;
+  e.preventDefault();
+  const [kind, id] = action.split(':');
+  if (kind === 'win') {
+    if (id === 'zoomIn') resizeBy(1.1);
+    else if (id === 'zoomOut') resizeBy(1 / 1.1);
+    else if (window.shell) window.shell.scale(860, 'center');
     return;
   }
-  const id = KEYBOARD_MAP[e.key];
-  if (!id) return;
-  e.preventDefault();
-  void SHIFTED_TYPING;
+  // a SHIFT action presses SHIFT first (unless it is already on)
+  if (kind === 'shift' && !calc.shift) { flash('SHIFT'); calc.press('SHIFT'); }
   flash(id);
   press(id);
 });
@@ -192,15 +184,16 @@ if (window.shell) {
     for (const job of jobs) {
       calc.initializeAll(); calc.showHome = !!job.home;
       for (const k of job.keys.split(/\s+/).filter(Boolean)) calc.press(k);
+      // optional shortcuts window: run job.shortcutsJs in it (e.g. to change a shortcut), then save pictures of it
+      if (job.shortcuts) { await window.shell.captureShortcuts(job.shortcuts, job.shortcutsJs || ''); await new Promise((r) => setTimeout(r, 300)); }
       // optional PC-keyboard input, e.g. ["S", "0", ".", "5", "Enter"] (Shift is implied by upper-case letters)
-      // "Ctrl+Shift+Digit7" style entries send that physical key (KeyboardEvent.code) with Ctrl+Shift
+      // "Ctrl+Shift+Digit7" / "Ctrl+KeyK" style entries send that physical key (KeyboardEvent.code) with those modifiers
       for (const key of job.kbd || []) {
-        const cs = /^Ctrl\+Shift\+(.+)$/.exec(key);
-        window.dispatchEvent(new KeyboardEvent('keydown', cs
-          ? { key: '', code: cs[1], ctrlKey: true, shiftKey: true, cancelable: true }
+        const m = /^((?:(?:Ctrl|Alt|Shift|Meta)\+)+)(.+)$/.exec(key);
+        window.dispatchEvent(new KeyboardEvent('keydown', m
+          ? { key: '', code: m[2], ctrlKey: m[1].includes('Ctrl'), altKey: m[1].includes('Alt'), shiftKey: m[1].includes('Shift'), metaKey: m[1].includes('Meta'), cancelable: true }
           : { key, shiftKey: /^[A-Z]$/.test(key), cancelable: true }));
       }
-      if (job.shortcuts) await window.shell.captureShortcuts(job.shortcuts);
       calc.blink = false; paint();
       await new Promise((r) => setTimeout(r, 120));
       await window.shell.capture(job.out);

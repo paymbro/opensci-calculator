@@ -10,5 +10,5 @@ contextBridge.exposeInMainWorld('shell', {
   capture: (file) => ipcRenderer.invoke('app:capture', file),
   quit: () => ipcRenderer.send('app:quit'),
   openShortcuts: () => ipcRenderer.send('app:shortcuts'),
-  captureShortcuts: (file) => ipcRenderer.invoke('app:captureShortcuts', file),
+  captureShortcuts: (file, js) => ipcRenderer.invoke('app:captureShortcuts', file, js),
 });

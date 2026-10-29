@@ -53,11 +53,12 @@ function openShortcuts() {
   shortcutsWin.on('closed', () => { shortcutsWin = null; });
 }
 ipcMain.on('app:shortcuts', openShortcuts);
-// test mode: open the shortcuts window and save a picture of it
-ipcMain.handle('app:captureShortcuts', async (e, file) => {
+// test mode: open the shortcuts window, optionally run a script in it, and save pictures of it
+ipcMain.handle('app:captureShortcuts', async (e, file, js) => {
   openShortcuts();
   await new Promise((r) => setTimeout(r, 1500));
   const wc = shortcutsWin.webContents;
+  if (js) { await wc.executeJavaScript(js); await new Promise((r) => setTimeout(r, 300)); }
   fs.writeFileSync(file, (await wc.capturePage()).toPNG());
   for (let i = 1; i <= 4; i++) {   // further screenfuls: name_1.png ...
     await wc.executeJavaScript(`window.scrollTo(0, ${i} * (innerHeight - 40))`);

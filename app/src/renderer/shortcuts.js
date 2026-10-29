@@ -1,87 +1,117 @@
-// Keyboard shortcuts window (opened from SETTINGS > Get Started).  Built from the same key maps the
-// calculator window uses, so the list always matches what the keys actually do.
-import { KEYBOARD_MAP, KEYBOARD_SHIFT_MAP, KEYBOARD_CTRL_SHIFT_MAP, SHIFTED } from '../core/keys.js';
+// Keyboard shortcuts window (opened from SETTINGS > Get Started).  Lists every calculator key, SHIFT
+// function and window action with its PC shortcuts, and lets the user add (+), remove (×) and reset
+// them.  Changes are saved to localStorage, which the calculator window reloads straight away.
+import {
+  ACTIONS, actionLabel, shiftKeyLabel, comboOf, comboKeys, loadOverrides, saveOverrides,
+  effectiveBindings, addBinding, removeBinding, resetBinding,
+} from '../core/bindings.js';
 
-const NAMES = {
-  D0: '0', D1: '1', D2: '2', D3: '3', D4: '4', D5: '5', D6: '6', D7: '7', D8: '8', D9: '9',
-  DOT: 'Decimal point', ADD: '+', SUB: '−', MUL: '×', DIV: '÷', LPAR: '(', RPAR: ')', POW: 'Power ■^□',
-  EXE: 'EXE', DEL: 'DEL (backspace)', AC: 'AC (clear)', BACK: 'BACK', OK: 'OK',
-  UP: 'Up', DOWN: 'Down', LEFT: 'Left', RIGHT: 'Right', PGUP: 'Page up', PGDN: 'Page down',
-  HOME: 'HOME', SHIFT: 'SHIFT', VARIABLE: 'VARIABLE', FUNCTION: 'FUNCTION', CATALOG: 'CATALOG',
-  TOOLS: 'TOOLS', SETTINGS: 'SETTINGS', FORMAT: 'FORMAT', ON: 'ON',
-  X: '𝑥', SIN: 'sin', COS: 'cos', TAN: 'tan', ANS: 'Ans', SQRT: 'Square root √', SQR: 'Square ■²',
-  LOGB: 'log■□', EXP10: '×10■', FRAC: 'Fraction ■/□',
-};
-const SHIFT_NAMES = {
-  ASIN: 'sin⁻¹', ACOS: 'cos⁻¹', ATAN: 'tan⁻¹', LOG: 'log', LN: 'ln', ROOT: '𝑥-th root ■√□',
-  MIXED: 'Mixed fraction ■□/□', RECIP: 'Reciprocal ■⁻¹', EQ: '=', COMMA: ',', PI: 'π', E: 'e', I: '𝑖',
-  INS: 'INS (insert)', OFF: 'OFF', VA: 'Variable A', VB: 'Variable B', VC: 'Variable C', VD: 'Variable D',
-  VE: 'Variable E', VF: 'Variable F', DMS: '°′″', NEG: '(−) negative', VX: 'Variable 𝑥', VY: 'Variable 𝑦', VZ: 'Variable 𝑧', FMT2: 'FORMAT (other mode)',
-  APPROX: '≈ (decimal result)', CATLIST: 'CATALOG list', SLEFT: 'Jump to start', SRIGHT: 'Jump to end',
-};
-const KEY_TEXT = {
-  ' ': 'Space', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc',
-  Delete: 'Del', Backspace: 'Backspace', PageUp: 'PgUp', PageDown: 'PgDn',
-};
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const kbd = (k) => `<kbd>${esc(k)}</kbd>`;
+const comboHTML = (c) => comboKeys(c).map(kbd).join('+');
+const comboText = (c) => comboKeys(c).join('+');
 
-const el = (tag, html) => { const e = document.createElement(tag); if (html !== undefined) e.innerHTML = html; return e; };
-const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-const kbd = (k) => `<kbd>${esc(KEY_TEXT[k] || k)}</kbd>`;
-const combo = (...ks) => ks.map(kbd).join('+');
-const alts = (list) => list.join('<span class="or">or</span>');
+const keyActions = (ids) => ids.map((id) => 'key:' + id);
+const SECTIONS = [
+  ['Numbers and arithmetic', keyActions(['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'DOT', 'ADD', 'SUB', 'MUL', 'DIV', 'LPAR', 'RPAR', 'POW', 'EXE'])],
+  ['Functions', keyActions(['X', 'SIN', 'COS', 'TAN', 'SQRT', 'SQR', 'LOGB', 'EXP10', 'FRAC', 'ANS'])],
+  ['Editing and moving', keyActions(['DEL', 'AC', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'PGUP', 'PGDN', 'OK', 'BACK'])],
+  ['Menu keys', keyActions(['HOME', 'SHIFT', 'VARIABLE', 'FUNCTION', 'CATALOG', 'TOOLS', 'SETTINGS', 'FORMAT', 'ON'])],
+  ['Yellow SHIFT functions', ACTIONS.filter((a) => a.startsWith('shift:'))],
+  ['Window', ACTIONS.filter((a) => a.startsWith('win:'))],
+];
 
+let overrides = loadOverrides(localStorage);
+let capturing = null;   // action waiting for a key press
 const main = document.getElementById('list');
-function section(title, rows, note) {
-  main.appendChild(el('h2', esc(title)));
-  const t = el('table');
-  for (const [keys, what] of rows) { const tr = el('tr'); tr.append(el('td', keys), el('td', esc(what))); t.appendChild(tr); }
-  main.appendChild(t);
-  if (note) main.appendChild(el('p', note)).className = 'note';
+const toast = document.getElementById('toast');
+let toastTimer = 0;
+
+function say(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 4500);
 }
 
-// PC keys grouped by the calculator key they press (upper-case X is the same key as x)
-const byId = new Map();
-for (const [k, id] of Object.entries(KEYBOARD_MAP)) {
-  if (k === 'X') continue;
-  if (!byId.has(id)) byId.set(id, []);
-  byId.get(id).push(k);
+function apply({ overrides: o, moved }, added) {
+  overrides = o;
+  saveOverrides(localStorage, overrides);
+  if (added && moved.length) say(`${comboText(added)} was taken from “${actionLabel(moved[0].from)}”.`);
+  render();
 }
-const rows = (ids) => ids.filter((id) => byId.has(id)).map((id) => [alts(byId.get(id).map((k) => kbd(k))), NAMES[id] || id]);
 
-section('Numbers and arithmetic', [[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => kbd(String(d))).join(''), 'Digits (number row or keypad)'], ...rows(['DOT', 'ADD', 'SUB', 'MUL', 'DIV', 'LPAR', 'RPAR', 'POW', 'EXE'])]);
-section('Functions', rows(['X', 'SIN', 'COS', 'TAN', 'SQRT', 'SQR', 'LOGB', 'EXP10', 'FRAC', 'ANS']));
-section('Editing and moving', rows(['DEL', 'AC', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'PGUP', 'PGDN', 'OK', 'BACK']));
-section('Menu keys', rows(['HOME', 'SHIFT', 'VARIABLE', 'FUNCTION', 'CATALOG', 'TOOLS', 'SETTINGS', 'FORMAT', 'ON']));
-
-// Shift+letter runs that key's SHIFT function directly
-section('SHIFT functions with the PC Shift key',
-  Object.entries(KEYBOARD_SHIFT_MAP).map(([k, id]) => [combo('Shift', k), SHIFT_NAMES[SHIFTED[id]] || SHIFTED[id]]));
-
-// Ctrl+Shift+key: the yellow function above that key (letters repeat the Shift+letter list above)
-const CODE_TEXT = (c) => c.replace(/^Digit/, '').replace(/^Key/, '').replace(/^Numpad(\d)$/, 'Num $1')
-  .replace('NumpadDecimal', 'Num .').replace('NumpadEnter', 'Num Enter').replace('Period', '.').replace('Comma', ',').replace('Minus', '-');
-const csGroups = new Map();
-for (const [code, id] of Object.entries(KEYBOARD_CTRL_SHIFT_MAP)) {
-  if (code.startsWith('Key') || code.startsWith('Numpad')) continue;   // keypad: see the note
-  if (!csGroups.has(id)) csGroups.set(id, []);
-  csGroups.get(id).push(CODE_TEXT(code));
+function render() {
+  const y = window.scrollY;
+  const b = effectiveBindings(overrides);
+  main.innerHTML = '';
+  for (const [title, actions] of SECTIONS) {
+    main.appendChild(el('h2', '', esc(title)));
+    const t = el('table');
+    for (const a of actions) {
+      const tr = el('tr');
+      tr.dataset.action = a;
+      const what = el('td', 'what', esc(actionLabel(a)) + (a.startsWith('shift:') ? ` <span class="sub">SHIFT ${esc(shiftKeyLabel(a))}</span>` : ''));
+      if (overrides[a]) {
+        const r = el('button', 'link', 'Reset');
+        r.title = 'Go back to the default shortcuts for this';
+        r.onclick = () => apply(resetBinding(overrides, a));
+        what.append(' ', r);
+      }
+      const keys = el('td', 'keys');
+      for (const c of b[a]) {
+        const chip = el('span', 'chip', comboHTML(c));
+        const x = el('button', 'rm', '×');
+        x.title = `Remove ${comboText(c)}`;
+        x.onclick = () => apply(removeBinding(overrides, a, c));
+        chip.appendChild(x);
+        keys.appendChild(chip);
+      }
+      if (capturing === a) {
+        keys.appendChild(el('span', 'waiting', 'Press a key or combination… <span class="sub">(Esc to cancel)</span>'));
+      } else {
+        const add = el('button', 'add', '+');
+        add.title = 'Add a shortcut';
+        add.onclick = () => { capturing = a; render(); };
+        keys.appendChild(add);
+      }
+      tr.append(what, keys);
+      t.appendChild(tr);
+    }
+    main.appendChild(t);
+  }
+  main.appendChild(el('p', 'note', `You can also press ${kbd('Tab')} (SHIFT) and then any key for its yellow function.
+    ${kbd('Ctrl')}+mouse wheel resizes the calculator, and dragging its body moves it. ${kbd('Alt')}+${kbd('F4')} closes a window.`));
+  window.scrollTo(0, y);
 }
-section('Yellow SHIFT functions with Ctrl+Shift',
-  [...csGroups].map(([id, ks]) => [alts(ks.map((k) => combo('Ctrl', 'Shift', k))), SHIFT_NAMES[SHIFTED[id]] || SHIFTED[id]]),
-  `The keypad digits, ${kbd('.')} and ${kbd('Enter')} work too. ${combo('Ctrl', 'Shift')} with a letter from the list above does the same as ${kbd('Shift')} with that letter.`);
 
-// the rest: press the calculator's SHIFT (Tab or F1), then the key
-const direct = new Set(Object.values(KEYBOARD_CTRL_SHIFT_MAP));
-const viaShift = Object.entries(SHIFTED)
-  .filter(([id, s]) => s !== 'QR' && !direct.has(id) && byId.has(id))
-  .map(([id, s]) => [`${kbd('Tab')} then ${alts(byId.get(id).map((k) => kbd(k)))}`, SHIFT_NAMES[s] || s]);
-section('Other SHIFT functions', viaShift, `${kbd('F1')} works the same as ${kbd('Tab')}. Press SHIFT again to cancel it.`);
+// while waiting for a shortcut, the next key press (with any modifiers) becomes it
+document.addEventListener('keydown', (e) => {
+  if (!capturing) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) { capturing = null; render(); return; }
+  const c = comboOf(e);
+  if (!c) return;   // a modifier on its own: keep waiting for the rest of the combination
+  const a = capturing;
+  capturing = null;
+  apply(addBinding(overrides, a, c), c);
+}, true);
+document.addEventListener('mousedown', (e) => {
+  if (capturing && !e.target.closest('.add')) { capturing = null; render(); }
+});
 
-section('Window', [
-  [alts([combo('Ctrl', '+'), combo('Ctrl', 'Mouse wheel up')]), 'Make the calculator bigger'],
-  [alts([combo('Ctrl', '-'), combo('Ctrl', 'Mouse wheel down')]), 'Make the calculator smaller'],
-  [combo('Ctrl', '0'), 'Reset the size'],
-  ['Drag the bottom-right corner', 'Resize'],
-  ['Drag the calculator body', 'Move the window'],
-  [combo('Alt', 'F4'), 'Close the calculator (or this window)'],
-]);
+document.getElementById('resetAll').onclick = () => {
+  if (!Object.keys(overrides).length) { say('All shortcuts are already the defaults.'); return; }
+  if (!window.confirm('Reset all keyboard shortcuts to the defaults?')) return;
+  overrides = {};
+  saveOverrides(localStorage, overrides);
+  render();
+  say('All shortcuts are back to the defaults.');
+};
+
+// another shortcuts window or the calculator changed them
+window.addEventListener('storage', () => { overrides = loadOverrides(localStorage); render(); });
+
+render();

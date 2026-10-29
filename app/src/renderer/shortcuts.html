@@ -20,16 +20,38 @@
   kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 1px 2px 1px 0; text-align: center;
         font: 12px/18px Consolas, "Cascadia Mono", monospace; color: #f2f4f5; background: #3a4046;
         border: 1px solid #50575e; border-bottom-width: 2px; border-radius: 4px; white-space: nowrap; }
-  .or { color: #7d858c; font-size: 12px; margin: 0 3px; }
-  .note { color: #a9b0b6; font-size: 12.5px; margin: 6px 0 0; }
+  .note { color: #a9b0b6; font-size: 12.5px; margin: 14px 0 0; line-height: 1.8; }
+  header { display: flex; align-items: flex-start; gap: 12px; position: sticky; top: 0; background: #1f2225; z-index: 2; }
+  header > div { flex: 1; }
+  td.what { width: 44%; }
+  .sub { color: #7d858c; font-size: 12px; }
+  .chip { display: inline-flex; align-items: center; margin: 1px 6px 3px 0; padding: 0 0 0 2px; border-radius: 6px; background: #2a2e32; white-space: nowrap; }
+  .chip kbd { margin-right: 0; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .rm { border: 0; background: none; color: #8a9299; padding: 0 6px; font-size: 15px; line-height: 20px; border-radius: 0 6px 6px 0; }
+  .rm:hover { color: #fff; background: #a23b3b; }
+  .add { width: 24px; height: 22px; padding: 0; border: 1px dashed #5d656c; border-radius: 5px; background: none; color: #9fb8c9; font-size: 15px; line-height: 18px; }
+  .add:hover { border-style: solid; background: #2f3a42; color: #fff; }
+  .link { border: 0; background: none; padding: 0; color: #7fb3d9; font-size: 12px; text-decoration: underline; }
+  .waiting { display: inline-block; padding: 1px 8px; border-radius: 5px; background: #33414c; color: #e8eaec; font-size: 12.5px; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { background: #3e5262; } }
+  #resetAll { padding: 5px 10px; border: 1px solid #50575e; border-radius: 6px; background: #2a2e32; font-size: 12.5px; white-space: nowrap; }
+  #resetAll:hover { background: #3a4046; }
+  #toast { position: fixed; left: 50%; bottom: 16px; transform: translate(-50%, 20px); max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 8px;
+           background: #3a4046; color: #f2f4f5; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
 </style>
 </head>
 <body>
 <header>
-  <h1>Keyboard shortcuts</h1>
-  <p>Every key can also be clicked with the mouse.</p>
+  <div>
+    <h1>Keyboard shortcuts</h1>
+    <p>Click <b>+</b> to add a shortcut and <b>×</b> to remove one. Changes are saved and work straight away. Every key can also be clicked with the mouse.</p>
+  </div>
+  <button id="resetAll" title="Go back to the default shortcuts">Reset all</button>
 </header>
 <main id="list"></main>
+<div id="toast" role="status"></div>
 <script type="module" src="shortcuts.js"></script>
 </body>
 </html>

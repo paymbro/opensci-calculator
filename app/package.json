@@ -1,7 +1,7 @@
 {
   "name": "opensci-calculator",
   "productName": "OpenSci Calculator",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Open-source scientific calculator for the desktop",
   "main": "src/main.cjs",
   "type": "module",
