@@ -103,7 +103,8 @@ export class Parser {
   // level 5: negative sign and base prefixes
   parseNeg() {
     const t = this.peek();
-    if (t && (t.v === '(-)' || (t.v === '−' && this.opts.lenientMinus))) {
+    // the − key also works as a negative sign wherever a value is expected, e.g. √26(−1), 2×−3
+    if (t && (t.v === '(-)' || (t.v === '−' && this.opts.lenientMinus !== false))) {
       this.next();
       return { t: 'neg', a: this.parseNeg(), item: t.item };
     }

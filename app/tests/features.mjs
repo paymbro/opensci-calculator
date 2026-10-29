@@ -107,6 +107,22 @@ check('SHIFT functions', 'Ctrl+Shift+4 → A (stored 5)', () => R('SHIFT ' + KEY
 check('SETTINGS', 'Get Started opens the shortcuts window', () => { let opened = 0; const c = newCalc(); c.onGetStarted = () => opened++; press(c, 'SETTINGS D4'); return opened; }, '1');
 for (const [ch, id] of Object.entries(KEYBOARD_SHIFT_MAP)) check('SHIFT functions', `PC Shift+${ch} → SHIFT ${id} (${SHIFTED[id]})`, () => SHIFTED[id], (s) => !!s);
 
+// the − key also works as a negative sign where a value is expected
+const minusTests = [
+  ['√26(−1)', 'SQRT D2 D6 RIGHT LPAR SUB D1 RPAR EXE', '-√26'],
+  ['(√26)(−1)', 'LPAR SQRT D2 D6 RIGHT RPAR LPAR SUB D1 RPAR EXE', '-√26'],
+  ['(−1)', 'LPAR SUB D1 RPAR EXE', '-1'],
+  ['−1 at start', 'SUB D1 EXE', '-1'],
+  ['2×−3', 'D2 MUL SUB D3 EXE', '-6'],
+  ['2−−3', 'D2 SUB SUB D3 EXE', '5'],
+  ['2−3 still subtracts', 'D2 SUB D3 EXE', '-1'],
+  ['(−2)² = 4', 'LPAR SUB D2 RPAR SQR EXE', '4'],
+  ['−2² = −4 (priority)', 'SUB D2 SQR EXE', '-4'],
+  ['5 = then −2 continues Ans', 'D5 EXE SUB D2 EXE', '3'],
+  ['lone − is Syntax ERROR', 'SUB EXE', 'ERROR:Syntax'],
+];
+for (const [item, keys, want] of minusTests) check('Minus as negative sign', item, () => R(keys), want);
+
 // ------------------------------------------------------------ CATALOG
 const catTests = [
   ['d/dx sin x at π/2 (Rad, p.57)', 'CATALOG D1 D1 SIN X RPAR RIGHT SHIFT D7 FRAC D2 EXE', '0', (c) => { c.settings.angle = 'rad'; }],
